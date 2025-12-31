@@ -10,8 +10,10 @@ echo "=========================================="
 echo "ComfyUI Wan2.2 Setup Starting..."
 echo "=========================================="
 
-# Detect ComfyUI path (vastai/comfy biasanya di /workspace/ComfyUI atau /opt/ComfyUI)
-if [ -d "/workspace/ComfyUI" ]; then
+# Detect ComfyUI path (vastai/comfy uses /opt/workspace-internal/ComfyUI)
+if [ -d "/opt/workspace-internal/ComfyUI" ]; then
+    COMFY_DIR="/opt/workspace-internal/ComfyUI"
+elif [ -d "/workspace/ComfyUI" ]; then
     COMFY_DIR="/workspace/ComfyUI"
 elif [ -d "/opt/ComfyUI" ]; then
     COMFY_DIR="/opt/ComfyUI"
@@ -19,9 +21,10 @@ elif [ -d "/ComfyUI" ]; then
     COMFY_DIR="/ComfyUI"
 else
     echo "ComfyUI not found, cloning..."
-    cd /workspace
+    mkdir -p /opt/workspace-internal
+    cd /opt/workspace-internal
     git clone https://github.com/comfyanonymous/ComfyUI.git
-    COMFY_DIR="/workspace/ComfyUI"
+    COMFY_DIR="/opt/workspace-internal/ComfyUI"
 fi
 
 echo "ComfyUI directory: $COMFY_DIR"
