@@ -47,13 +47,13 @@ mkdir -p $COMFY_DIR/models/text_encoders
 mkdir -p $COMFY_DIR/models/clip_vision
 
 # =============================================================================
-# Download Models (~41GB)
+# Download Models
 # =============================================================================
 echo "=========================================="
 echo "Downloading Models (this may take 15-20 minutes)..."
 echo "=========================================="
 
-# Function to download with aria2 (fast, resume support)
+# Function to download with wget (follows redirects automatically)
 download_model() {
     local url=$1
     local output_dir=$2
@@ -63,8 +63,7 @@ download_model() {
         echo "✓ $filename already exists, skipping..."
     else
         echo "Downloading $filename..."
-        aria2c -x 16 -s 16 -k 1M -d "$output_dir" -o "$filename" "$url" || \
-        wget -P "$output_dir" -O "$output_dir/$filename" "$url"
+        wget -q -c -P "$output_dir" -O "$output_dir/$filename" "$url"
     fi
 }
 
@@ -74,23 +73,23 @@ download_model \
     "$COMFY_DIR/models/text_encoders" \
     "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 
-# Diffusion Model - 14B I2V (10GB)
+# Diffusion Model - 14B I2V fp8 (16.4GB) - smaller file, faster download
 download_model \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_14b_480p_bf16.safetensors" \
+    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors" \
     "$COMFY_DIR/models/diffusion_models" \
-    "wan2.1_i2v_14b_480p_bf16.safetensors"
+    "wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors"
 
-# Diffusion Model - 14B T2V (10GB)  
+# Diffusion Model - 14B T2V fp8 (14.3GB) - smaller file, faster download
 download_model \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14b_bf16.safetensors" \
+    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14B_fp8_e4m3fn.safetensors" \
     "$COMFY_DIR/models/diffusion_models" \
-    "wan2.1_t2v_14b_bf16.safetensors"
+    "wan2.1_t2v_14B_fp8_e4m3fn.safetensors"
 
-# VAE (243MB)
+# VAE (1.1GB)
 download_model \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae_bf16.safetensors" \
+    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
     "$COMFY_DIR/models/vae" \
-    "wan_2.1_vae_bf16.safetensors"
+    "wan_2.1_vae.safetensors"
 
 # CLIP Vision (1.6GB)
 download_model \
