@@ -47,7 +47,7 @@ mkdir -p $COMFY_DIR/models/text_encoders
 mkdir -p $COMFY_DIR/models/clip_vision
 
 # =============================================================================
-# Download Models
+# Download Models (~45GB total)
 # =============================================================================
 echo "=========================================="
 echo "Downloading Models (this may take 15-20 minutes)..."
@@ -59,43 +59,74 @@ download_model() {
     local output_dir=$2
     local filename=$3
     
-    if [ -f "$output_dir/$filename" ]; then
+    if [ -f "$output_dir/$filename" ] && [ -s "$output_dir/$filename" ]; then
         echo "✓ $filename already exists, skipping..."
     else
         echo "Downloading $filename..."
-        wget -q -c -P "$output_dir" -O "$output_dir/$filename" "$url"
+        rm -f "$output_dir/$filename" 2>/dev/null
+        wget -c -P "$output_dir" -O "$output_dir/$filename" "$url"
     fi
 }
 
-# Text Encoder (11GB)
+# TEXT ENCODER (6.3GB) - From Comfy-Org (PUBLIC)
 download_model \
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
     "$COMFY_DIR/models/text_encoders" \
     "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 
-# Diffusion Model - 14B I2V fp8 (16.4GB) - smaller file, faster download
+# DIFFUSION MODELS - I2V (16GB) - From Comfy-Org (PUBLIC)
 download_model \
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors" \
     "$COMFY_DIR/models/diffusion_models" \
     "wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors"
 
-# Diffusion Model - 14B T2V fp8 (14.3GB) - smaller file, faster download
+# DIFFUSION MODELS - T2V (14GB) - From Comfy-Org (PUBLIC)
 download_model \
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14B_fp8_e4m3fn.safetensors" \
     "$COMFY_DIR/models/diffusion_models" \
     "wan2.1_t2v_14B_fp8_e4m3fn.safetensors"
 
-# VAE (1.1GB)
+# DIFFUSION MODELS - I2V LOW (14GB) - From Kijai (REQUIRES LOGIN)
+# This model requires HuggingFace authentication
+# To download: Set HF_TOKEN env var or download manually
+echo "NOTE: Wan2_2-I2V-A14B-LOW requires HuggingFace login"
+echo "If you have a token, run:"
+echo "  wget --header='Authorization: Bearer YOUR_TOKEN' 'https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/I2V/Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors'"
+
+# VAE (243MB) - From Comfy-Org (PUBLIC)
 download_model \
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors" \
     "$COMFY_DIR/models/vae" \
     "wan_2.1_vae.safetensors"
 
-# CLIP Vision (1.6GB)
+# CLIP VISION (1.2GB) - From Comfy-Org (PUBLIC)
 download_model \
     "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors" \
     "$COMFY_DIR/models/clip_vision" \
     "clip_vision_h.safetensors"
+
+# LORA (298MB) - From Comfy-Org (PUBLIC)
+download_model \
+    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/loras/wan_alpha_2.1_rgba_lora.safetensors" \
+    "$COMFY_DIR/models/loras" \
+    "wan_alpha_2.1_rgba_lora.safetensors"
+
+# =============================================================================
+# OPTIONAL: Download LIGHTX2V LoRA (Requires HuggingFace Login)
+# =============================================================================
+echo ""
+echo "=========================================="
+echo "OPTIONAL: LIGHTX2V LoRA Models"
+echo "=========================================="
+echo "These models require HuggingFace authentication:"
+echo "  - LIGHTX2V_I2V_2.2_HIGH.safetensors (~100MB)"
+echo "  - LIGHTX2V_I2V_2.2_LOW.safetensors (~100MB)"
+echo ""
+echo "To download manually:"
+echo "  wget --header='Authorization: Bearer YOUR_TOKEN' \\"
+echo "    'https://huggingface.co/Kijai/wan2.2_comfyui_wrapper/resolve/main/LIGHTX2V_I2V_2.2_HIGH.safetensors'"
+echo ""
+echo "Or set HF_TOKEN environment variable before running this script."
 
 # =============================================================================
 # Clone Custom Nodes
@@ -173,8 +204,18 @@ echo "=========================================="
 echo "Setup Complete!"
 echo "=========================================="
 echo "ComfyUI directory: $COMFY_DIR"
-echo "Models downloaded to: $COMFY_DIR/models/"
-echo "Custom nodes installed: 19 nodes"
+echo ""
+echo "Models installed:"
+echo "  - Text Encoder: umt5_xxl_fp8_e4m3fn_scaled (6.3GB)"
+echo "  - I2V Model: wan2.1_i2v_480p_14B_fp8_e4m3fn (16GB)"
+echo "  - T2V Model: wan2.1_t2v_14B_fp8_e4m3fn (14GB)"
+echo "  - VAE: wan_2.1_vae (243MB)"
+echo "  - CLIP Vision: clip_vision_h (1.2GB)"
+echo "  - LoRA: wan_alpha_2.1_rgba_lora (298MB)"
+echo ""
+echo "Optional (requires login):"
+echo "  - Wan2_2-I2V-A14B-LOW (14GB)"
+echo "  - LIGHTX2V LoRA models (~200MB)"
 echo ""
 echo "ComfyUI should be available at port 8188"
 echo "=========================================="
