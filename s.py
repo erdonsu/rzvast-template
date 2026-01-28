@@ -60,6 +60,7 @@ GIT_NODES = [
     ("RockOfFire/ComfyUI_Comfyroll_CustomNodes", False, True),
     ("cubiq/ComfyUI_essentials", False, True),
     ("city96/ComfyUI-GGUF", False, True),
+    ("Lightricks/ComfyUI-LTXVideo", False, True),
 ]
 
 vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
@@ -83,6 +84,59 @@ def ui():
             subprocess.run(f"cp -r {DEFAULT_COMFY_DIR} {DATA_ROOT}/", shell=True, check=True)
         else:
             os.makedirs(DATA_BASE, exist_ok=True)
+
+    # FORCE install LTXVideo node (required untuk workflow LTX-2)
+    ltxvideo_path = os.path.join(CUSTOM_NODES_DIR, "ComfyUI-LTXVideo")
+    
+    if not os.path.exists(ltxvideo_path):
+        print("📦 Installing ComfyUI-LTXVideo (required for LTX models)...")
+        try:
+            subprocess.run(
+                f"git clone https://github.com/Lightricks/ComfyUI-LTXVideo {ltxvideo_path}",
+                shell=True, check=True, capture_output=True, text=True
+            )
+            print("✓ ComfyUI-LTXVideo cloned")
+            
+            # Install requirements
+            req_file = os.path.join(ltxvideo_path, "requirements.txt")
+            if os.path.exists(req_file):
+                subprocess.run(
+                    f"pip install -r {req_file}",
+                    shell=True, check=True, capture_output=True, text=True
+                )
+                print("✓ Requirements installed")
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to install LTXVideo: {e.stderr}")
+    else:
+        print("✓ ComfyUI-LTXVideo already installed")
+
+    
+    # FIX: Update comfyui-model-downloader jika ada (fix TypeError)
+    model_downloader_path = os.path.join(CUSTOM_NODES_DIR, "comfyui-model-downloader")
+    
+    if os.path.exists(model_downloader_path):
+        print("🔧 Updating comfyui-model-downloader to fix TypeError...")
+        os.chdir(model_downloader_path)
+        try:
+            # Pull latest version
+            subprocess.run("git pull", shell=True, check=True, capture_output=True, text=True)
+            print("✓ Updated to latest version")
+            
+            # Reinstall/upgrade requirements
+            req_file = os.path.join(model_downloader_path, "requirements.txt")
+            if os.path.exists(req_file):
+                subprocess.run(
+                    f"pip install --upgrade -r {req_file}",
+                    shell=True, check=True, capture_output=True, text=True
+                )
+                print("✓ Requirements updated")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  Update failed: {e.stderr}")
+        
+        os.chdir(DATA_BASE)
+
+    # Install custom nodes
+    nodes_installed_flag = os.path.join(DATA_BASE, ".nodes_installed")
 
     # Install custom nodes
     nodes_installed_flag = os.path.join(DATA_BASE, ".nodes_installed")
@@ -137,8 +191,6 @@ def ui():
     config_content = "[default]\nnetwork_mode = personal_cloud\nsecurity_level = weak\nlog_to_file = false\n"
     with open(os.path.join(manager_config_dir, "config.ini"), "w") as f:
         f.write(config_content)
-
-   # ... (semua kode sebelumnya tetap sama sampai Configure Manager)
 
     # Ensure directories
     for d in [CUSTOM_NODES_DIR, MODELS_DIR]:
