@@ -159,7 +159,17 @@ def ui():
         print("   modal run download_models.py\n")
 
     # Launch ComfyUI
-    os.environ["COMFY_DIR"] = DATA_BASE
-    print(f"🚀 Starting ComfyUI from {DATA_BASE}...")
-    cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000"]
-    subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
+# Launch ComfyUI
+os.environ["COMFY_DIR"] = DATA_BASE
+
+# Setup comfy-cli config untuk disable tracking
+comfy_config_dir = os.path.expanduser("~/.config/comfy-cli")
+os.makedirs(comfy_config_dir, exist_ok=True)
+config_toml = os.path.join(comfy_config_dir, "config.toml")
+with open(config_toml, "w") as f:
+    f.write("tracking_enabled = false\n")
+print(f"✓ Tracking disabled in {config_toml}")
+
+print(f"🚀 Starting ComfyUI from {DATA_BASE}...")
+cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000"]
+subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
