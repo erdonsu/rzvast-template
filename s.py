@@ -41,7 +41,8 @@ image = (
         "pip install --no-cache-dir comfy-cli uv",
         "uv pip install --system --compile-bytecode huggingface_hub[hf_transfer]==0.28.1",
         # Install ComfyUI from official repo
-        "git clone https://github.com/Comfy-Org/ComfyUI.git /root/comfy/ComfyUI && cd /root/comfy/ComfyUI && pip install -e ."
+        "git clone https://github.com/Comfy-Org/ComfyUI.git /root/comfy/ComfyUI",
+        "cd /root/comfy/ComfyUI && pip install -r requirements.txt"
     ])
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     # dependencies install for some nodes
