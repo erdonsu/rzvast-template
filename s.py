@@ -138,13 +138,15 @@ def ui():
     with open(os.path.join(manager_config_dir, "config.ini"), "w") as f:
         f.write(config_content)
 
+   # ... (semua kode sebelumnya tetap sama sampai Configure Manager)
+
     # Ensure directories
     for d in [CUSTOM_NODES_DIR, MODELS_DIR]:
         os.makedirs(d, exist_ok=True)
 
-    # Check models (hanya check, tidak download)
+    # Check models
     print("Checking models...")
-    model_dirs = ["checkpoints", "loras", "vae/LTX", "upscale_models"]
+    model_dirs = ["checkpoints", "loras", "upscale_models"]
     models_ok = True
     for md in model_dirs:
         full_path = os.path.join(MODELS_DIR, md)
@@ -155,21 +157,20 @@ def ui():
             models_ok = False
     
     if not models_ok:
-        print("\n⚠️  Some models missing! Run download_models.py first:")
-        print("   modal run download_models.py\n")
+        print("\n⚠️  Some models missing! Run: modal run download_models.py")
 
-    # Launch ComfyUI
-# Launch ComfyUI
-os.environ["COMFY_DIR"] = DATA_BASE
-
-# Setup comfy-cli config untuk disable tracking
-comfy_config_dir = os.path.expanduser("~/.config/comfy-cli")
-os.makedirs(comfy_config_dir, exist_ok=True)
-config_toml = os.path.join(comfy_config_dir, "config.toml")
-with open(config_toml, "w") as f:
-    f.write("tracking_enabled = false\n")
-print(f"✓ Tracking disabled in {config_toml}")
-
-print(f"🚀 Starting ComfyUI from {DATA_BASE}...")
-cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000"]
-subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
+    # Launch ComfyUI directly via Python (bypass comfy-cli)
+    print(f"🚀 Starting ComfyUI from {DATA_BASE}...")
+    os.chdir(DATA_BASE)
+    
+    env = os.environ.copy()
+    env["COMFYUI_TRACKING"] = "0"
+    
+    cmd = [
+        "python", "main.py",
+        "--listen", "0.0.0.0",
+        "--port", "8000"
+    ]
+    
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.Popen(cmd, cwd=DATA_BASE, env=env)
