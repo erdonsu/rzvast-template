@@ -40,11 +40,11 @@ image = (
         "pip install --upgrade pip",
         "pip install --no-cache-dir comfy-cli uv",
         "uv pip install --system --compile-bytecode huggingface_hub[hf_transfer]==0.28.1",
-        # Install ComfyUI from official repo
         "git clone https://github.com/Comfy-Org/ComfyUI.git /root/comfy/ComfyUI",
         "cd /root/comfy/ComfyUI && pip install -r requirements.txt",
-        # Install dependencies untuk custom nodes
-        "pip install ftfy accelerate einops diffusers sentencepiece sageattention onnx onnxruntime onnxruntime-gpu"
+        "pip install ftfy accelerate einops diffusers sentencepiece sageattention onnx onnxruntime onnxruntime-gpu",
+        # PENTING: Set comfy-cli config untuk skip tracking prompt
+        "comfy tracking disable"  # ← TAMBAHKAN INI
     ])
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
 )
