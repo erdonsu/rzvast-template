@@ -140,6 +140,11 @@ for repo, flags in [
     ("nkchocoai/ComfyUI-SaveImageWithMetaData", {}),
     # Prompt Reader Node - sumber: https://github.com/receyuki/comfyui-prompt-reader-node
     ("receyuki/comfyui-prompt-reader-node", {'recursive': True, 'install_reqs': True}),
+    # QwenImageIntegratedKSampler - untuk workflow Qwen Image Edit
+    ("luguoli/ComfyUI-Qwen-Image-Integrated-KSampler", {'install_reqs': True}),
+    # QwenMultiangleCameraNode - untuk multi-angle camera control (96 poses)
+    # Source: https://github.com/jtydhr88/ComfyUI-qwenmultiangle
+    ("jtydhr88/ComfyUI-qwenmultiangle", {'install_reqs': True}),
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
 
@@ -160,6 +165,23 @@ model_tasks = [
     ("loras", "ltx-2-19b-ic-lora-detailer.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Detailer", None),
     # Gemma FP8 text encoder (lebih ringan dari FP4)
     ("text_encoders", "gemma_3_12B_it_fp8_e4m3fn.safetensors", "GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn", None),
+    
+    # ==========================================
+    # Qwen Image Edit 2511 Models (Full Precision BF16)
+    # Source: https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI
+    # ==========================================
+    # Qwen Image Edit 2511 diffusion model (BF16 - 40.9GB)
+    ("diffusion_models", "qwen_image_edit_2511_bf16.safetensors", "Comfy-Org/Qwen-Image-Edit_ComfyUI", "split_files/diffusion_models"),
+    # Qwen Image VAE
+    ("vae", "qwen_image_vae.safetensors", "Comfy-Org/Qwen-Image_ComfyUI", "split_files/vae"),
+    # Qwen 2.5 VL 7B CLIP text encoder (Full Precision - 16.6GB)
+    # Source: https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main/split_files/text_encoders
+    ("clip", "qwen_2.5_vl_7b.safetensors", "Comfy-Org/Qwen-Image_ComfyUI", "split_files/text_encoders"),
+    # Qwen Image Lightning LoRA (8 steps V1.1)
+    ("loras", "Qwen-Image-Lightning-8steps-V1.1.safetensors", "lightx2v/Qwen-Image-Lightning", None),
+    # Multi-Angle Camera Control LoRA (96 poses)
+    # Source: https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA
+    ("loras", "qwen-image-edit-2511-multiple-angles-lora.safetensors", "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA", None),
 ]
 
 extra_cmds = [
