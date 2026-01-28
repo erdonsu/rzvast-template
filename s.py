@@ -37,17 +37,20 @@ import modal
 image = (
     modal.Image.from_registry("python:3.12-slim-bookworm")
     .apt_install("git", "wget", "libgl1-mesa-glx", "libglib2.0-0", "ffmpeg")
+    .env({
+        "HF_HUB_ENABLE_HF_TRANSFER": "1",
+        "COMFY_TRACKING_ENABLED": "0",  # ← TAMBAHKAN INI
+        "COMFYUI_TRACKING": "0"         # ← DAN INI
+    })
     .run_commands([
         "pip install --upgrade pip",
         "pip install --no-cache-dir comfy-cli uv",
         "uv pip install --system --compile-bytecode huggingface_hub[hf_transfer]==0.28.1",
         "git clone https://github.com/Comfy-Org/ComfyUI.git /root/comfy/ComfyUI",
         "cd /root/comfy/ComfyUI && pip install -r requirements.txt",
-        "pip install ftfy accelerate einops diffusers sentencepiece sageattention onnx onnxruntime onnxruntime-gpu",
-        # PENTING: Set comfy-cli config untuk skip tracking prompt
-        "comfy tracking disable"  # ← TAMBAHKAN INI
+        "pip install ftfy accelerate einops diffusers sentencepiece sageattention onnx onnxruntime onnxruntime-gpu"
+        # HAPUS "comfy tracking disable"
     ])
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
 )
 
 # Git-based nodes
