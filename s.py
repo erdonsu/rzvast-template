@@ -61,7 +61,6 @@ for repo, flags in [
     # ("welltop-cn/ComfyUI-TeaCache", {'install_reqs': True}),
     ("nkchocoai/ComfyUI-SaveImageWithMetaData", {}),
     ("receyuki/comfyui-prompt-reader-node", {'recursive': True, 'install_reqs': True}),
-    ("ltdrdata/ComfyUI-Manager", {}),  # Official ComfyUI-Manager for extended features
     # ("crystian/ComfyUI-Crystools", {'install_reqs': True}), # v1.27.4 conflict
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
