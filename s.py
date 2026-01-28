@@ -1,4 +1,5 @@
 import os
+import modal
 import shutil
 import subprocess
 from typing import Optional
@@ -49,12 +50,7 @@ image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
 )
 
-# HAPUS bagian ini - pindahkan ke runtime
-# image = image.run_commands([
-#     "comfy node install rgthree-comfy ..."
-# ])
-
-# Git-based nodes - install via git clone saja
+# Git-based nodes
 for repo, flags in [
     ("ssitu/ComfyUI_UltimateSDUpscale", {'recursive': True}),
     ("nkchocoai/ComfyUI-SaveImageWithMetaData", {}),
@@ -62,32 +58,33 @@ for repo, flags in [
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
 
-# Model download tasks
+# PERBAIKI Model tasks - hapus duplikasi "main/"
 model_tasks = [
-    ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", "main"),
-    ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2", "main"),
-    ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2", "main"),
+    ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", None),  # ← ubah "main" jadi None
+    ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2", None),  # ← ubah
+    ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2", None),  # ← ubah
     ("loras", "ltx-2-19b-ic-lora-canny-control.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Canny-Control", None),
-    ("vae/LTX", "audio_vae.safetensors", "Lightricks/LTX-2", "main/audio_vae"),
-    ("text_encoder/LTX", "gemma-3-12b-it-qat-q4_0.gguf", "google/gemma-3-12b-it-qat-q4_0-unquantized", None),
+    ("vae/LTX", "audio_vae.safetensors", "Lightricks/LTX-2", "audio_vae"),  # ← hapus "main/"
+    # HAPUS model Gemma yang butuh gated access
+    # ("text_encoder/LTX", "gemma-3-12b-it-qat-q4_0.gguf", "google/gemma-3-12b-it-qat-q4_0-unquantized", None),
 ]
 
 extra_cmds = [
     f"wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth -P {MODELS_DIR}/upscale_models",
 ]
 
-# Nodes yang akan diinstall via comfy-cli di runtime
-COMFY_NODES = [
-    "rgthree-comfy",
-    "comfyui-impact-pack", 
-    "comfyui-impact-subpack",
-    "ComfyUI-YOLO",
-    "comfyui-inspire-pack",
-    "comfyui_ipadapter_plus",
-    "wlsh_nodes",
-    "ComfyUI_Comfyroll_CustomNodes",
-    "comfyui_essentials",
-    "ComfyUI-GGUF"
+# Nodes - install via git clone langsung, BUKAN comfy-cli
+GIT_NODES = [
+    ("rgthree/rgthree-comfy", True, False),  # (repo, recursive, install_reqs)
+    ("ltdrdata/ComfyUI-Impact-Pack", False, True),
+    ("ltdrdata/ComfyUI-Impact-Subpack", False, True),
+    ("Acly/comfyui-tooling-nodes", False, True),  # Ganti YOLO
+    ("ltdrdata/ComfyUI-Inspire-Pack", False, True),
+    ("cubiq/ComfyUI_IPAdapter_plus", False, True),
+    ("WASasquatch/was-node-suite-comfyui", False, True),  # Ganti wlsh_nodes
+    ("RockOfFire/ComfyUI_Comfyroll_CustomNodes", False, True),
+    ("cubiq/ComfyUI_essentials", False, True),
+    ("city96/ComfyUI-GGUF", False, True),
 ]
 
 vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
@@ -111,54 +108,63 @@ def ui():
             print(f"Copying {DEFAULT_COMFY_DIR} to {DATA_BASE}")
             subprocess.run(f"cp -r {DEFAULT_COMFY_DIR} {DATA_ROOT}/", shell=True, check=True)
         else:
-            print(f"Warning: {DEFAULT_COMFY_DIR} not found, creating empty structure")
+            print(f"Warning: {DEFAULT_COMFY_DIR} not found")
             os.makedirs(DATA_BASE, exist_ok=True)
 
-    # Install custom nodes via comfy-cli di RUNTIME (hanya sekali)
+    # Install custom nodes via GIT CLONE (bukan comfy-cli)
     nodes_installed_flag = os.path.join(DATA_BASE, ".nodes_installed")
     if not os.path.exists(nodes_installed_flag):
-        print("Installing custom nodes via comfy-cli...")
-        os.chdir(DATA_BASE)
-        os.environ["COMFY_DIR"] = DATA_BASE
+        print("Installing custom nodes via git clone...")
+        os.makedirs(CUSTOM_NODES_DIR, exist_ok=True)
         
-        for node in COMFY_NODES:
-            print(f"Installing {node}...")
+        for repo, recursive, install_reqs in GIT_NODES:
+            name = repo.split("/")[-1]
+            dest = os.path.join(CUSTOM_NODES_DIR, name)
+            
+            if os.path.exists(dest):
+                print(f"✓ {name} already exists, skipping")
+                continue
+                
+            print(f"Installing {name}...")
             try:
-                result = subprocess.run(
-                    f"comfy node install {node}",
-                    shell=True,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=DATA_BASE
-                )
-                print(f"✓ {node} installed: {result.stdout}")
+                cmd = f"git clone https://github.com/{repo} {dest}"
+                if recursive:
+                    cmd += " --recursive"
+                
+                subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                print(f"✓ {name} cloned")
+                
+                if install_reqs:
+                    req_file = os.path.join(dest, "requirements.txt")
+                    if os.path.exists(req_file):
+                        subprocess.run(
+                            f"pip install -r {req_file}",
+                            shell=True, check=True, capture_output=True, text=True
+                        )
+                        print(f"✓ {name} requirements installed")
             except subprocess.CalledProcessError as e:
-                print(f"✗ Failed to install {node}: {e.stderr}")
-                # Lanjutkan ke node berikutnya
+                print(f"✗ Failed to install {name}: {e.stderr}")
                 continue
         
-        # Tandai bahwa nodes sudah diinstall
+        # Tandai selesai
         with open(nodes_installed_flag, "w") as f:
             f.write("installed")
         print("Custom nodes installation completed!")
 
-    # Fix detached HEAD dan update ComfyUI
-    print("Fixing git branch and updating ComfyUI backend...")
+    # ... (sisa kode sama seperti sebelumnya)
+    
+    # Git update
+    print("Updating ComfyUI backend...")
     os.chdir(DATA_BASE)
     try:
         result = subprocess.run("git symbolic-ref HEAD", shell=True, capture_output=True, text=True)
         if result.returncode != 0:
-            print("Detected detached HEAD, checking out master branch...")
             subprocess.run("git checkout -B master origin/master", shell=True, check=True, capture_output=True, text=True)
         subprocess.run("git config pull.ff only", shell=True, check=True, capture_output=True, text=True)
-        result = subprocess.run("git pull --ff-only", shell=True, check=True, capture_output=True, text=True)
-        print("Git pull output:", result.stdout)
+        subprocess.run("git pull --ff-only", shell=True, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error updating ComfyUI backend: {e.stderr}")
+        print(f"Error: {e.stderr}")
 
-    # [Sisa kode tetap sama...]
-    
     # Configure Manager
     manager_config_dir = os.path.join(DATA_BASE, "user", "__manager")
     manager_config_path = os.path.join(manager_config_dir, "config.ini")
@@ -172,7 +178,7 @@ def ui():
         os.makedirs(d, exist_ok=True)
 
     # Download models
-    print("Checking and downloading missing models...")
+    print("Downloading models...")
     for sub, fn, repo, subf in model_tasks:
         target = os.path.join(MODELS_DIR, sub, fn)
         if not os.path.exists(target):
@@ -190,5 +196,5 @@ def ui():
     # Launch ComfyUI
     os.environ["COMFY_DIR"] = DATA_BASE
     print(f"Starting ComfyUI from {DATA_BASE}...")
-    cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000", "--enable-manager"]
+    cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000"]
     subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
