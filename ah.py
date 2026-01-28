@@ -1,3 +1,16 @@
+"""
+ComfyUI Modal Deployment Script
+===============================
+
+Sumber Resmi (Verified):
+- ComfyUI: https://github.com/comfyanonymous/ComfyUI
+- ComfyUI-Manager: https://github.com/Comfy-Org/ComfyUI-Manager
+- comfy-cli: https://github.com/Comfy-Org/comfy-cli (pip install comfy-cli)
+
+PyTorch CUDA 13.0 (dari README resmi ComfyUI):
+  pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130
+"""
+
 import os
 import shutil
 import subprocess
@@ -11,10 +24,19 @@ CUSTOM_NODES_DIR = os.path.join(DATA_BASE, "custom_nodes")
 MODELS_DIR = os.path.join(DATA_BASE, "models")
 TMP_DL = "/tmp/download"
 
-# ComfyUI default install location
+# ComfyUI default install location (by comfy-cli)
 DEFAULT_COMFY_DIR = "/root/comfy/ComfyUI"
 
+# Nodes yang bermasalah dan harus dihapus dari volume
+PROBLEMATIC_NODES = [
+    "ComfyUI_HFDownLoad",
+    "hf-model-downloader", 
+    "comfyui_hf_model_downloader",
+    "comfyui-model-downloader",
+]
+
 def git_clone_cmd(node_repo: str, recursive: bool = False, install_reqs: bool = False) -> str:
+    """Clone custom node dari GitHub ke lokasi default ComfyUI"""
     name = node_repo.split("/")[-1]
     dest = os.path.join(DEFAULT_COMFY_DIR, "custom_nodes", name)
     cmd = f"git clone https://github.com/{node_repo} {dest}"
@@ -25,6 +47,7 @@ def git_clone_cmd(node_repo: str, recursive: bool = False, install_reqs: bool = 
     return cmd
   
 def hf_download(subdir: str, filename: str, repo_id: str, subfolder: Optional[str] = None):
+    """Download model dari HuggingFace Hub"""
     out = hf_hub_download(repo_id=repo_id, filename=filename, subfolder=subfolder, local_dir=TMP_DL)
     target = os.path.join(MODELS_DIR, subdir)
     os.makedirs(target, exist_ok=True)
@@ -32,51 +55,112 @@ def hf_download(subdir: str, filename: str, repo_id: str, subfolder: Optional[st
 
 import modal
 
-# Build image with ComfyUI installed to default location /root/comfy/ComfyUI
+# =============================================================================
+# IMAGE BUILD
+# =============================================================================
+# Menggunakan NVIDIA CUDA base image dengan PyTorch CUDA 13.0
+# Sesuai dokumentasi resmi ComfyUI: https://github.com/comfyanonymous/ComfyUI
+# =============================================================================
+
 image = (
-    modal.Image.from_registry("python:3.12-slim-bookworm")
-    .apt_install("git", "wget", "libgl1-mesa-glx", "libglib2.0-0", "ffmpeg")
+    modal.Image.from_registry(
+        # NVIDIA CUDA 12.8 runtime dengan cuDNN (kompatibel dengan PyTorch cu130)
+        "nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04",
+        add_python="3.12"
+    )
+    .apt_install("git", "wget", "libgl1-mesa-glx", "libglib2.0-0", "ffmpeg", "curl")
     .run_commands([
         "pip install --upgrade pip",
+        # Install comfy-cli dari sumber resmi (Comfy-Org)
         "pip install --no-cache-dir comfy-cli uv",
         "uv pip install --system --compile-bytecode huggingface_hub[hf_transfer]==0.28.1",
-        # Install ComfyUI to default location
-        "comfy --skip-prompt install --nvidia"
+        # ============================================================
+        # PyTorch dengan CUDA 13.0 - SESUAI DOKUMENTASI RESMI ComfyUI
+        # Source: https://github.com/comfyanonymous/ComfyUI#nvidia
+        # ============================================================
+        "pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130",
+        # Install triton untuk optimized operations
+        "pip install triton>=3.0.0",
+        # ============================================================
+        # Install ComfyUI menggunakan comfy-cli resmi
+        # Source: https://github.com/Comfy-Org/comfy-cli
+        # ============================================================
+        "comfy --skip-prompt install --nvidia --skip-torch-check"
     ])
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
-    # dependencies install for some nodes
+    .env({
+        "HF_HUB_ENABLE_HF_TRANSFER": "1",
+        "TORCH_CUDA_ARCH_LIST": "8.0;8.6;8.9;9.0"  # Support untuk A100, A10, L40S, H100
+    })
+    # Dependencies untuk custom nodes
     .run_commands([
-        "pip install ftfy accelerate einops diffusers sentencepiece sageattention onnx onnxruntime onnxruntime-gpu"
+        "pip install ftfy accelerate einops diffusers sentencepiece sageattention",
+        "pip install onnx onnxruntime onnxruntime-gpu",
+        # Fix untuk opencv ximgproc (guidedFilter) - dibutuhkan beberapa nodes
+        "pip install opencv-contrib-python-headless",
+        # Fix untuk easyocr - dibutuhkan beberapa nodes
+        "pip install easyocr",
     ])
 )
 
-# Install nodes to default ComfyUI location during build
+# =============================================================================
+# INSTALL CUSTOM NODES
+# =============================================================================
+# Menggunakan comfy-cli node install (sumber resmi)
+# Nodes diinstall ke lokasi default: /root/comfy/ComfyUI/custom_nodes/
+# =============================================================================
+
 image = image.run_commands([
-    "comfy --skip-prompt node install rgthree-comfy comfyui-impact-pack comfyui-impact-subpack ComfyUI-YOLO comfyui-inspire-pack comfyui_ipadapter_plus wlsh_nodes ComfyUI_Comfyroll_CustomNodes comfyui_essentials ComfyUI-GGUF ComfyUI-LTXVideo"
+    # Install nodes menggunakan comfy-cli (akan mengambil dari registry resmi)
+    "comfy --skip-prompt node install "
+    "rgthree-comfy "
+    "comfyui-impact-pack "
+    "comfyui-impact-subpack "
+    "ComfyUI-YOLO "
+    "comfyui-inspire-pack "
+    "comfyui_ipadapter_plus "
+    "wlsh_nodes "
+    "ComfyUI_Comfyroll_CustomNodes "
+    "comfyui_essentials "
+    "ComfyUI-GGUF "
+    "ComfyUI-LTXVideo "
+    "ComfyUI-Manager "
+    "comfyui-kjnodes"
 ])
 
-# Git-based nodes baked into image at default ComfyUI location
+# Git-based nodes yang di-bake ke image (untuk nodes yang tidak ada di registry)
 for repo, flags in [
+    # UltimateSDUpscale - sumber: https://github.com/ssitu/ComfyUI_UltimateSDUpscale
     ("ssitu/ComfyUI_UltimateSDUpscale", {'recursive': True}),
+    # SaveImageWithMetaData - sumber: https://github.com/nkchocoai/ComfyUI-SaveImageWithMetaData
     ("nkchocoai/ComfyUI-SaveImageWithMetaData", {}),
+    # Prompt Reader Node - sumber: https://github.com/receyuki/comfyui-prompt-reader-node
     ("receyuki/comfyui-prompt-reader-node", {'recursive': True, 'install_reqs': True}),
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
 
-# Model download tasks (will be done at runtime)
+# =============================================================================
+# MODEL DOWNLOADS (Runtime)
+# =============================================================================
+# Models akan di-download saat runtime untuk menghemat build time
+# =============================================================================
+
 model_tasks = [
+    # LTX-2 Models dari Lightricks (HuggingFace)
     ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", None),
     ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2", None),
     ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2", None),
     ("loras", "ltx-2-19b-ic-lora-canny-control.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Canny-Control", None),
-    # HAPUS baris ComfyUI-LTXVideo dari sini - itu custom node, bukan model!
 ]
 
 extra_cmds = [
-    f"wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth -P {MODELS_DIR}/upscale_models",
+    # RealESRGAN upscaler dari xinntao
+    f"wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth -P {MODELS_DIR}/upscale_models",
 ]
 
-# Create volume
+# =============================================================================
+# MODAL APP CONFIGURATION
+# =============================================================================
+
 vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
 app = modal.App(name="comfyui", image=image)
 
@@ -90,6 +174,19 @@ app = modal.App(name="comfyui", image=image)
 @modal.concurrent(max_inputs=10)
 @modal.web_server(8000, startup_timeout=300)
 def ui():
+    """
+    Main UI function yang menjalankan ComfyUI
+    
+    Flow:
+    1. Cek apakah volume kosong (first run)
+    2. Copy ComfyUI dari image ke volume jika perlu
+    3. Cleanup problematic nodes
+    4. Sync missing nodes dari image
+    5. Update ComfyUI dan Manager
+    6. Download models
+    7. Launch ComfyUI
+    """
+    
     # Check if volume is empty (first run)
     if not os.path.exists(os.path.join(DATA_BASE, "main.py")):
         print("First run detected. Copying ComfyUI from default location to volume...")
@@ -100,6 +197,15 @@ def ui():
         else:
             print(f"Warning: {DEFAULT_COMFY_DIR} not found, creating empty structure")
             os.makedirs(DATA_BASE, exist_ok=True)
+
+    # Remove problematic nodes from volume
+    print("Removing problematic custom nodes...")
+    for node_name in PROBLEMATIC_NODES:
+        node_path = os.path.join(CUSTOM_NODES_DIR, node_name)
+        if os.path.exists(node_path):
+            print(f"Removing {node_name}...")
+            shutil.rmtree(node_path)
+            print(f"Removed {node_name}")
 
     # Fix detached HEAD and update ComfyUI backend
     print("Fixing git branch and updating ComfyUI backend...")
@@ -114,6 +220,17 @@ def ui():
         print("Git pull output:", result.stdout)
     except subprocess.CalledProcessError as e:
         print(f"Error updating ComfyUI backend: {e.stderr}")
+
+    # Sync custom nodes from image to volume (ensure all nodes exist)
+    print("Syncing custom nodes from image to volume...")
+    image_nodes_dir = os.path.join(DEFAULT_COMFY_DIR, "custom_nodes")
+    if os.path.exists(image_nodes_dir):
+        for node_name in os.listdir(image_nodes_dir):
+            src = os.path.join(image_nodes_dir, node_name)
+            dst = os.path.join(CUSTOM_NODES_DIR, node_name)
+            if os.path.isdir(src) and not os.path.exists(dst):
+                print(f"Copying missing node: {node_name}")
+                shutil.copytree(src, dst)
 
     # Configure Manager
     manager_config_dir = os.path.join(DATA_BASE, "user", "__manager")
@@ -159,10 +276,15 @@ def ui():
     print("Upgrading comfy-cli...")
     subprocess.run("pip install --no-cache-dir --upgrade comfy-cli", shell=True, check=False, capture_output=True)
 
-    # Update frontend
+    # Install ComfyUI requirements
     requirements_path = os.path.join(DATA_BASE, "requirements.txt")
     if os.path.exists(requirements_path):
         subprocess.run(f"pip install -r {requirements_path}", shell=True, check=False, capture_output=True)
+    
+    # Install Manager requirements
+    manager_requirements_path = os.path.join(DATA_BASE, "manager_requirements.txt")
+    if os.path.exists(manager_requirements_path):
+        subprocess.run(f"pip install -r {manager_requirements_path}", shell=True, check=False, capture_output=True)
 
     # Ensure directories
     for d in [CUSTOM_NODES_DIR, MODELS_DIR, TMP_DL]:
@@ -176,15 +298,19 @@ def ui():
             print(f"Downloading {fn}...")
             try:
                 hf_download(sub, fn, repo, subf)
-                print(f"✓ Downloaded {fn}")
+                print(f"Downloaded {fn}")
             except Exception as e:
-                print(f"✗ Error downloading {fn}: {e}")
+                print(f"Error downloading {fn}: {e}")
         else:
-            print(f"✓ {fn} already exists")
+            print(f"{fn} already exists")
 
     # Extra downloads
     for cmd in extra_cmds:
         subprocess.run(cmd, shell=True, check=False, cwd=DATA_BASE, capture_output=True)
+
+    # Commit volume changes
+    print("Committing volume changes...")
+    vol.commit()
 
     # Launch ComfyUI
     os.environ["COMFY_DIR"] = DATA_BASE
@@ -196,6 +322,7 @@ def ui():
     with open(os.path.join(comfy_config_dir, "config.toml"), "w") as f:
         f.write("tracking_enabled = false\n")
     
+    # Launch dengan --enable-manager flag
     cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000", "--enable-manager"]
     print(f"Executing: {' '.join(cmd)}")
     subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
