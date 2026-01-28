@@ -85,7 +85,7 @@ image = (
         # Install ComfyUI menggunakan comfy-cli resmi
         # Source: https://github.com/Comfy-Org/comfy-cli
         # ============================================================
-        "comfy --skip-prompt install --nvidia --skip-torch-check"
+        "comfy --skip-prompt install --nvidia --skip-torch-or-directml"
     ])
     .env({
         "HF_HUB_ENABLE_HF_TRANSFER": "1",
@@ -124,7 +124,12 @@ image = image.run_commands([
     "ComfyUI-GGUF "
     "ComfyUI-LTXVideo "
     "ComfyUI-Manager "
-    "comfyui-kjnodes"
+    "comfyui-kjnodes "
+    # Nodes untuk workflow LTX-2 Distilled
+    "ComfyUI-VideoHelperSuite "  # VHS_VideoCombine - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+    "ComfyUI-Custom-Scripts "    # MathExpression|pysssss - https://github.com/pythongosssss/ComfyUI-Custom-Scripts
+    "ComfyMath "                 # CM_FloatToInt - https://github.com/evanspearman/ComfyMath
+    "ComfyUI-Easy-Use"           # easy showAnything - https://github.com/yolain/ComfyUI-Easy-Use
 ])
 
 # Git-based nodes yang di-bake ke image (untuk nodes yang tidak ada di registry)
@@ -148,8 +153,13 @@ model_tasks = [
     # LTX-2 Models dari Lightricks (HuggingFace)
     ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", None),
     ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2", None),
+    ("checkpoints", "ltx-2-temporal-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", None),  # Temporal upscaler
     ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2", None),
     ("loras", "ltx-2-19b-ic-lora-canny-control.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Canny-Control", None),
+    # IC-LoRA Detailer untuk video enhancement
+    ("loras", "ltx-2-19b-ic-lora-detailer.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Detailer", None),
+    # Gemma FP8 text encoder (lebih ringan dari FP4)
+    ("text_encoders", "gemma_3_12B_it_fp8_e4m3fn.safetensors", "GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn", None),
 ]
 
 extra_cmds = [
