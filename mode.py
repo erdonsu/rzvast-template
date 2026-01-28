@@ -36,12 +36,14 @@ vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
 app = modal.App(name="download-comfyui-models", image=image)
 
 # Model list
+# Model list - HAPUS baris vae/LTX yang error
 MODEL_TASKS = [
     ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2", None),
     ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2", None),
     ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2", None),
     ("loras", "ltx-2-19b-ic-lora-canny-control.safetensors", "Lightricks/LTX-2-19b-IC-LoRA-Canny-Control", None),
-    ("vae/LTX", "audio_vae.safetensors", "Lightricks/LTX-2", "audio_vae"),
+    # HAPUS baris ini karena path salah/404:
+    # ("vae/LTX", "audio_vae.safetensors", "Lightricks/LTX-2", "audio_vae"),
 ]
 
 @app.function(
