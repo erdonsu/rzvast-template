@@ -144,7 +144,7 @@ for repo, flags in [
     ("luguoli/ComfyUI-Qwen-Image-Integrated-KSampler", {'install_reqs': True}),
     # QwenMultiangleCameraNode - untuk multi-angle camera control (96 poses)
     # Source: https://github.com/jtydhr88/ComfyUI-qwenmultiangle
-    ("jtydhr88/ComfyUI-qwenmultiangle", {'install_reqs': True}),
+    ("jtydhr88/ComfyUI-qwenmultiangle", {}),
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
 
