@@ -33,6 +33,8 @@ PROBLEMATIC_NODES = [
     "hf-model-downloader", 
     "comfyui_hf_model_downloader",
     "comfyui-model-downloader",
+    # comfyui-doctor sering conflict dengan ComfyUI-Manager
+    "comfyui-doctor",
 ]
 
 def git_clone_cmd(node_repo: str, recursive: bool = False, install_reqs: bool = False) -> str:
@@ -99,6 +101,16 @@ image = (
         "pip install opencv-contrib-python-headless",
         # Fix untuk easyocr - dibutuhkan beberapa nodes
         "pip install easyocr",
+        # ============================================================
+        # Dependencies untuk ComfyUI-LTXVideo
+        # Source: https://github.com/Lightricks/ComfyUI-LTXVideo/blob/master/requirements.txt
+        # ============================================================
+        "pip install ninja~=1.11.1.4 'transformers[timm]>=4.50.0' 'huggingface_hub>=0.25.2'",
+        # ============================================================
+        # Dependencies untuk ComfyUI Audio nodes (nodes_audio.py, nodes_lt_audio.py)
+        # Required for LTX-2 audio-video generation
+        # ============================================================
+        "pip install soundfile librosa scipy",
     ])
 )
 
@@ -147,6 +159,22 @@ for repo, flags in [
     ("jtydhr88/ComfyUI-qwenmultiangle", {}),
 ]:
     image = image.run_commands([git_clone_cmd(repo, **flags)])
+
+# =============================================================================
+# INSTALL REQUIREMENTS FOR COMFY-CLI INSTALLED NODES
+# =============================================================================
+# Beberapa nodes yang diinstall via comfy-cli memiliki requirements.txt
+# yang perlu diinstall secara manual
+# =============================================================================
+
+image = image.run_commands([
+    # Install ComfyUI-Manager requirements
+    f"pip install -r {DEFAULT_COMFY_DIR}/custom_nodes/ComfyUI-Manager/requirements.txt || true",
+    # Install ComfyUI-LTXVideo requirements
+    f"pip install -r {DEFAULT_COMFY_DIR}/custom_nodes/ComfyUI-LTXVideo/requirements.txt || true",
+    # Install ComfyUI-VideoHelperSuite requirements (untuk VHS_VideoCombine)
+    f"pip install -r {DEFAULT_COMFY_DIR}/custom_nodes/ComfyUI-VideoHelperSuite/requirements.txt || true",
+])
 
 # =============================================================================
 # MODEL DOWNLOADS (Runtime)
