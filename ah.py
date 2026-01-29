@@ -247,24 +247,64 @@ def ui():
     7. Launch ComfyUI
     """
     
-    # Check if volume is empty (first run) or needs update
-    if not os.path.exists(os.path.join(DATA_BASE, "main.py")):
-        print("ComfyUI core missing or needs update. Syncing from image...")
-        os.makedirs(DATA_ROOT, exist_ok=True)
-        if os.path.exists(DEFAULT_COMFY_DIR):
-            print(f"Syncing {DEFAULT_COMFY_DIR} to {DATA_BASE} (preserving existing files)...")
-            # Gunakan rsync atau cp dengan flag yang tidak overwrite existing files
-            # --ignore-existing: skip files yang sudah ada di destination
-            # Ini akan preserve models, custom_nodes, dll yang sudah ada
-            subprocess.run(
-                f"cp -rn {DEFAULT_COMFY_DIR}/* {DATA_BASE}/ 2>/dev/null || "
-                f"rsync -av --ignore-existing {DEFAULT_COMFY_DIR}/ {DATA_BASE}/",
-                shell=True, check=False
-            )
-            print("Sync completed. Existing models and nodes preserved.")
-        else:
-            print(f"Warning: {DEFAULT_COMFY_DIR} not found, creating empty structure")
-            os.makedirs(DATA_BASE, exist_ok=True)
+    # ==========================================================================
+    # FORCE UPDATE COMFYUI CORE (preserve models/ and custom_nodes/)
+    # ==========================================================================
+    # Problem: Volume may have old ComfyUI (0.3.64) while image has new (0.11.x)
+    # Solution: Delete core files and re-sync from image, but preserve user data
+    # ==========================================================================
+    
+    # Directories/files yang HARUS di-preserve (user data)
+    PRESERVE_DIRS = ["models", "custom_nodes", "user", "input", "output"]
+    
+    # Core directories/files yang HARUS di-update dari image
+    CORE_DIRS = ["comfy", "comfy_extras", "app", "api_server", "notebooks", "script_examples", "tests", "web"]
+    CORE_FILES = ["main.py", "nodes.py", "server.py", "requirements.txt", "pyproject.toml", "README.md", "LICENSE"]
+    
+    os.makedirs(DATA_ROOT, exist_ok=True)
+    os.makedirs(DATA_BASE, exist_ok=True)
+    
+    if os.path.exists(DEFAULT_COMFY_DIR):
+        print("Checking ComfyUI version and updating core files...")
+        
+        # Delete old core directories (force update)
+        for core_dir in CORE_DIRS:
+            old_path = os.path.join(DATA_BASE, core_dir)
+            if os.path.exists(old_path):
+                print(f"Removing old core directory: {core_dir}")
+                shutil.rmtree(old_path)
+        
+        # Delete old core files (force update)
+        for core_file in CORE_FILES:
+            old_path = os.path.join(DATA_BASE, core_file)
+            if os.path.exists(old_path):
+                print(f"Removing old core file: {core_file}")
+                os.remove(old_path)
+        
+        # Copy fresh core from image
+        print(f"Syncing fresh ComfyUI core from {DEFAULT_COMFY_DIR}...")
+        for item in os.listdir(DEFAULT_COMFY_DIR):
+            src = os.path.join(DEFAULT_COMFY_DIR, item)
+            dst = os.path.join(DATA_BASE, item)
+            
+            # Skip jika sudah ada di preserve list (models, custom_nodes, etc)
+            if item in PRESERVE_DIRS and os.path.exists(dst):
+                print(f"Preserving existing: {item}")
+                continue
+            
+            # Copy dari image
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+                print(f"Copied directory: {item}")
+            else:
+                shutil.copy2(src, dst)
+                print(f"Copied file: {item}")
+        
+        print("ComfyUI core updated successfully. User data preserved.")
+    else:
+        print(f"Warning: {DEFAULT_COMFY_DIR} not found!")
 
     # Remove problematic nodes from volume
     print("Removing problematic custom nodes...")
