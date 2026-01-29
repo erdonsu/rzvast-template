@@ -382,7 +382,11 @@ def ui():
     with open(os.path.join(comfy_config_dir, "config.toml"), "w") as f:
         f.write("tracking_enabled = false\n")
     
-    # Launch dengan --enable-manager flag
-    cmd = ["comfy", "launch", "--", "--listen", "0.0.0.0", "--port", "8000", "--enable-manager"]
-    print(f"Executing: {' '.join(cmd)}")
-    subprocess.Popen(cmd, cwd=DATA_BASE, env=os.environ.copy())
+    # Enable ComfyUI-Manager GUI sebelum launch
+    print("Enabling ComfyUI-Manager GUI...")
+    subprocess.run(f"comfy --workspace={DATA_BASE} manager enable-gui", shell=True, check=False, capture_output=True)
+    
+    # Launch ComfyUI dengan workspace yang benar
+    cmd = f"comfy --workspace={DATA_BASE} launch -- --listen 0.0.0.0 --port 8000"
+    print(f"Executing: {cmd}")
+    subprocess.Popen(cmd, shell=True, cwd=DATA_BASE, env=os.environ.copy())
