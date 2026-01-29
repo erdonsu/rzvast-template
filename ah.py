@@ -247,13 +247,21 @@ def ui():
     7. Launch ComfyUI
     """
     
-    # Check if volume is empty (first run)
+    # Check if volume is empty (first run) or needs update
     if not os.path.exists(os.path.join(DATA_BASE, "main.py")):
-        print("First run detected. Copying ComfyUI from default location to volume...")
+        print("ComfyUI core missing or needs update. Syncing from image...")
         os.makedirs(DATA_ROOT, exist_ok=True)
         if os.path.exists(DEFAULT_COMFY_DIR):
-            print(f"Copying {DEFAULT_COMFY_DIR} to {DATA_BASE}")
-            subprocess.run(f"cp -r {DEFAULT_COMFY_DIR} {DATA_ROOT}/", shell=True, check=True)
+            print(f"Syncing {DEFAULT_COMFY_DIR} to {DATA_BASE} (preserving existing files)...")
+            # Gunakan rsync atau cp dengan flag yang tidak overwrite existing files
+            # --ignore-existing: skip files yang sudah ada di destination
+            # Ini akan preserve models, custom_nodes, dll yang sudah ada
+            subprocess.run(
+                f"cp -rn {DEFAULT_COMFY_DIR}/* {DATA_BASE}/ 2>/dev/null || "
+                f"rsync -av --ignore-existing {DEFAULT_COMFY_DIR}/ {DATA_BASE}/",
+                shell=True, check=False
+            )
+            print("Sync completed. Existing models and nodes preserved.")
         else:
             print(f"Warning: {DEFAULT_COMFY_DIR} not found, creating empty structure")
             os.makedirs(DATA_BASE, exist_ok=True)
