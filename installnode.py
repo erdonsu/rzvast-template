@@ -1,8 +1,9 @@
 import os
 import modal
 import subprocess
-DATA_ROOT = "/data/comfy"
-CUSTOM_NODES_DIR = os.path.join(DATA_ROOT, "ComfyUI", "custom_nodes")
+# PATH YANG BENAR - langsung /data/ComfyUI bukan /data/comfy/ComfyUI
+DATA_ROOT = "/data"
+CUSTOM_NODES_DIR = "/data/ComfyUI/custom_nodes"
 image = modal.Image.debian_slim().apt_install("git")
 vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
 app = modal.App(name="install-custom-nodes", image=image)
@@ -29,7 +30,14 @@ def install_nodes():
         except Exception as e:
             print(f"  [ERROR] {e}")
     
-    print("\nDone!")
+    # Verify
+    print("\nVerifying installation:")
+    for name, _ in CUSTOM_NODES:
+        path = os.path.join(CUSTOM_NODES_DIR, name)
+        if os.path.exists(path):
+            print(f"  [FOUND] {name}")
+        else:
+            print(f"  [MISSING] {name}")
 @app.local_entrypoint()
 def main():
     install_nodes.remote()
