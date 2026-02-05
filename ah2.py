@@ -1,190 +1,232 @@
 """
-ComfyUI Modal Deployment - Simple & Stable Version
-Direct install from GitHub (no comfy-cli)
+ComfyUI Modal Deployment - Based on MxC (Modified for LTX-2)
+============================================================
+Original: https://github.com/Renks/MxC
+Modified: Added LTX-2 nodes and dependencies
 """
 
-import os
-import shutil
 import subprocess
-from typing import Optional
+from pathlib import Path
 import modal
+import os
 
-# =============================================================================
-# PATHS
-# =============================================================================
-COMFY_DIR = "/root/ComfyUI"
-CUSTOM_NODES_DIR = f"{COMFY_DIR}/custom_nodes"
-MODELS_DIR = f"{COMFY_DIR}/models"
+# ===========================
+# Configuration (Simplified)
+# ===========================
 
-# Volume mount point
-VOL_PATH = "/data"
-VOL_COMFY = f"{VOL_PATH}/ComfyUI"
+APP_NAME = "comfyui"
+VOLUME_NAME = "comfyui-app"
+VOLUME_MOUNT = "/data"
+COMFYUI_DIR = "/root/comfy/ComfyUI"
+CUSTOM_NODES_DIR = f"{COMFYUI_DIR}/custom_nodes"
+OUTPUT_DIR = f"{VOLUME_MOUNT}/output"
+MODELS_DIR = f"{VOLUME_MOUNT}/models"
 
-# =============================================================================
-# IMAGE BUILD - Using stable CUDA 12.1 + PyTorch 2.5
-# =============================================================================
+# GPU Type - change as needed
+GPU_TYPE = os.environ.get('MODAL_GPU_TYPE', 'A100-40GB')
 
-image = (
+# Web server
+WEB_HOST = "0.0.0.0"
+WEB_PORT = 8000
+
+# ===========================
+# Modal Image Configuration
+# ===========================
+
+comfy_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install(
         "git", "wget", "curl", "ffmpeg",
-        "libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender1"
+        "libgl1", "libglib2.0-0", "libsm6", "libxext6", "libxrender1"
     )
     .pip_install(
-        # PyTorch stable (CUDA 12.1)
-        "torch==2.5.1",
-        "torchvision==0.20.1",
-        "torchaudio==2.5.1",
-        "--index-url", "https://download.pytorch.org/whl/cu121",
-    )
-    .pip_install(
-        # Core dependencies
-        "aiohttp",
-        "einops",
-        "transformers>=4.28.1",
-        "safetensors>=0.4.2",
-        "accelerate",
-        "pyyaml",
-        "Pillow",
-        "scipy",
-        "tqdm",
-        "psutil",
-        "kornia>=0.7.1",
-        "spandrel",
-        "soundfile",
-        "av",
-    )
-    .run_commands([
-        # Clone ComfyUI from official repo
-        f"git clone https://github.com/comfyanonymous/ComfyUI.git {COMFY_DIR}",
-        f"pip install -r {COMFY_DIR}/requirements.txt",
-        
-        # Clone ComfyUI-Manager
-        f"git clone https://github.com/Comfy-Org/ComfyUI-Manager.git {CUSTOM_NODES_DIR}/ComfyUI-Manager",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-Manager/requirements.txt || true",
-    ])
-    .pip_install(
-        # Extra dependencies for nodes
+        "comfy-cli",
         "huggingface_hub[hf_transfer]",
-        "opencv-python-headless",
-        "scikit-image",
-        "diffusers",
-        "ftfy",
-        "regex",
-        "sentencepiece",
     )
-    .run_commands([
-        # Clone essential nodes
-        f"git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git {CUSTOM_NODES_DIR}/ComfyUI-LTXVideo",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-LTXVideo/requirements.txt || true",
-        
-        f"git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git {CUSTOM_NODES_DIR}/ComfyUI-VideoHelperSuite",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-VideoHelperSuite/requirements.txt || true",
-        
-        f"git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git {CUSTOM_NODES_DIR}/ComfyUI-Custom-Scripts",
-        
-        f"git clone https://github.com/TTPlanetPig/Comfyui_TTP_Toolset.git {CUSTOM_NODES_DIR}/Comfyui_TTP_Toolset",
-        f"pip install -r {CUSTOM_NODES_DIR}/Comfyui_TTP_Toolset/requirements.txt || true",
-        
-        f"git clone https://github.com/rgthree/rgthree-comfy.git {CUSTOM_NODES_DIR}/rgthree-comfy",
-        
-        f"git clone https://github.com/cubiq/ComfyUI_essentials.git {CUSTOM_NODES_DIR}/ComfyUI_essentials",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI_essentials/requirements.txt || true",
-        
-        f"git clone https://github.com/evanspearman/ComfyMath.git {CUSTOM_NODES_DIR}/ComfyMath",
-        
-        f"git clone https://github.com/city96/ComfyUI-GGUF.git {CUSTOM_NODES_DIR}/ComfyUI-GGUF",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-GGUF/requirements.txt || true",
-        
-        f"git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git {CUSTOM_NODES_DIR}/ComfyUI-Impact-Pack --recursive",
-        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-Impact-Pack/requirements.txt || true",
-        
-        f"git clone https://github.com/RandomInternetPreson/ComfyUI_LTX-2_VRAM_Memory_Management.git {CUSTOM_NODES_DIR}/ComfyUI_LTX-2_VRAM_Memory_Management",
-    ])
     .env({
         "HF_HUB_ENABLE_HF_TRANSFER": "1",
     })
+    # Install ComfyUI via comfy-cli
+    .run_commands("comfy --skip-prompt install --nvidia")
+    
+    # =========================================================================
+    # Core Dependencies for LTX-2 and Audio Nodes
+    # =========================================================================
+    .pip_install(
+        "gguf",
+        "sentencepiece",
+        "opencv-python-headless",
+        "soundfile",
+        "librosa",
+        "scipy",
+        "einops",
+        "accelerate",
+        "diffusers",
+        "transformers>=4.50.0",
+        "ftfy",
+    )
+    
+    # =========================================================================
+    # Install Custom Nodes via comfy-cli (Registry)
+    # =========================================================================
+    .run_commands(
+        "comfy node install ComfyUI-Manager",
+        "comfy node install ComfyUI-LTXVideo",       # LTX-2 Video nodes
+        "comfy node install ComfyUI-VideoHelperSuite", # VHS_VideoCombine
+        "comfy node install ComfyUI-Custom-Scripts",  # MathExpression|pysssss
+        "comfy node install ComfyMath",               # CM_FloatToInt
+        "comfy node install comfyui-easy-use",
+        "comfy node install comfyui-kjnodes",
+        "comfy node install rgthree-comfy",
+        "comfy node install comfyui_essentials",
+        "comfy node install ComfyUI-GGUF",
+        "comfy node install comfyui-impact-pack",
+        "comfy node install comfyui-inspire-pack",
+    )
+    
+    # =========================================================================
+    # Git Clone Nodes (Not in registry or need latest version)
+    # =========================================================================
+    .run_commands(
+        # TTP Toolset - untuk LTXVFirstLastFrameControl_TTP
+        f"git clone https://github.com/TTPlanetPig/Comfyui_TTP_Toolset.git {CUSTOM_NODES_DIR}/Comfyui_TTP_Toolset",
+        f"pip install -r {CUSTOM_NODES_DIR}/Comfyui_TTP_Toolset/requirements.txt || true",
+        
+        # LTX-2 VRAM Memory Management - untuk TensorParallelV3Node
+        f"git clone https://github.com/RandomInternetPreson/ComfyUI_LTX-2_VRAM_Memory_Management.git {CUSTOM_NODES_DIR}/ComfyUI_LTX-2_VRAM_Memory_Management",
+        
+        # Ultimate SD Upscale
+        f"git clone --recursive https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git {CUSTOM_NODES_DIR}/ComfyUI_UltimateSDUpscale",
+        
+        # Qwen nodes
+        f"git clone https://github.com/luguoli/ComfyUI-Qwen-Image-Integrated-KSampler.git {CUSTOM_NODES_DIR}/ComfyUI-Qwen-Image-Integrated-KSampler",
+        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-Qwen-Image-Integrated-KSampler/requirements.txt || true",
+        
+        f"git clone https://github.com/jtydhr88/ComfyUI-qwenmultiangle.git {CUSTOM_NODES_DIR}/ComfyUI-qwenmultiangle",
+    )
+    
+    # =========================================================================
+    # Install Requirements for Installed Nodes
+    # =========================================================================
+    .run_commands(
+        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-Manager/requirements.txt || true",
+        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-LTXVideo/requirements.txt || true",
+        f"pip install -r {CUSTOM_NODES_DIR}/ComfyUI-VideoHelperSuite/requirements.txt || true",
+    )
 )
 
-# =============================================================================
-# APP
-# =============================================================================
+# ===========================
+# Modal App Configuration
+# ===========================
 
-vol = modal.Volume.from_name("comfyui-vol", create_if_missing=True)
-app = modal.App(name="comfyui", image=image)
+app = modal.App(name=APP_NAME, image=comfy_image)
+model_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
-@app.function(
+@app.cls(
     max_containers=1,
     scaledown_window=600,
     timeout=3600,
-    gpu=os.environ.get('MODAL_GPU_TYPE', 'A100-40GB'),
-    volumes={VOL_PATH: vol},
+    gpu=GPU_TYPE,
+    volumes={VOLUME_MOUNT: model_volume},
 )
 @modal.concurrent(max_inputs=10)
-@modal.web_server(8000, startup_timeout=300)
-def ui():
-    from huggingface_hub import hf_hub_download
+class ComfyUIContainer:
     
-    # Use volume for persistent storage
-    work_dir = VOL_COMFY if os.path.exists(f"{VOL_COMFY}/main.py") else COMFY_DIR
-    
-    # First run: copy ComfyUI to volume
-    if not os.path.exists(f"{VOL_COMFY}/main.py"):
-        print("First run - copying ComfyUI to volume...")
-        shutil.copytree(COMFY_DIR, VOL_COMFY, dirs_exist_ok=True)
-        work_dir = VOL_COMFY
-    
-    # Ensure models directory exists
-    models_dir = f"{work_dir}/models"
-    os.makedirs(f"{models_dir}/checkpoints", exist_ok=True)
-    os.makedirs(f"{models_dir}/loras", exist_ok=True)
-    os.makedirs(f"{models_dir}/text_encoders", exist_ok=True)
-    os.makedirs(f"{models_dir}/vae", exist_ok=True)
-    os.makedirs(f"{models_dir}/clip", exist_ok=True)
-    os.makedirs(f"{models_dir}/diffusion_models", exist_ok=True)
-    os.makedirs(f"{models_dir}/upscale_models", exist_ok=True)
-    
-    # Download LTX-2 models if not exists
-    ltx_models = [
-        ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2"),
-        ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2"),
-        ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2"),
-        ("text_encoders", "gemma_3_12B_it_fp8_e4m3fn.safetensors", "GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn"),
-    ]
-    
-    for subdir, filename, repo in ltx_models:
-        target = f"{models_dir}/{subdir}/{filename}"
-        if not os.path.exists(target):
-            print(f"Downloading {filename}...")
-            try:
-                downloaded = hf_hub_download(repo_id=repo, filename=filename, local_dir="/tmp/hf")
-                shutil.move(downloaded, target)
-                print(f"Downloaded {filename}")
-            except Exception as e:
-                print(f"Failed to download {filename}: {e}")
-    
-    # Sync custom nodes from image if missing in volume
-    vol_nodes = f"{work_dir}/custom_nodes"
-    img_nodes = f"{COMFY_DIR}/custom_nodes"
-    
-    if os.path.exists(img_nodes):
-        for node in os.listdir(img_nodes):
-            src = f"{img_nodes}/{node}"
-            dst = f"{vol_nodes}/{node}"
-            if os.path.isdir(src) and not os.path.exists(dst):
-                print(f"Syncing node: {node}")
-                shutil.copytree(src, dst)
-    
-    # Configure Manager
-    manager_config = f"{work_dir}/user/default/comfy.settings.json"
-    os.makedirs(os.path.dirname(manager_config), exist_ok=True)
-    
-    # Commit changes
-    vol.commit()
-    
-    # Launch ComfyUI
-    print(f"Starting ComfyUI from {work_dir}...")
-    os.chdir(work_dir)
-    
-    cmd = ["python", "main.py", "--listen", "0.0.0.0", "--port", "8000"]
-    subprocess.Popen(cmd, cwd=work_dir)
+    @modal.enter()
+    def setup(self):
+        """Setup on container start"""
+        from huggingface_hub import hf_hub_download
+        import shutil
+        
+        # Create directories
+        dirs = [
+            f"{MODELS_DIR}/checkpoints",
+            f"{MODELS_DIR}/loras", 
+            f"{MODELS_DIR}/vae",
+            f"{MODELS_DIR}/clip",
+            f"{MODELS_DIR}/text_encoders",
+            f"{MODELS_DIR}/diffusion_models",
+            f"{MODELS_DIR}/upscale_models",
+            f"{VOLUME_MOUNT}/custom_nodes",
+            OUTPUT_DIR,
+        ]
+        for d in dirs:
+            Path(d).mkdir(parents=True, exist_ok=True)
+        
+        # Sync custom nodes from volume to ComfyUI
+        vol_nodes = Path(f"{VOLUME_MOUNT}/custom_nodes")
+        if vol_nodes.exists():
+            for node in vol_nodes.iterdir():
+                if node.is_dir():
+                    target = Path(CUSTOM_NODES_DIR) / node.name
+                    if not target.exists():
+                        print(f"Syncing node from volume: {node.name}")
+                        shutil.copytree(node, target)
+        
+        # Install requirements for volume nodes
+        nodes_path = Path(CUSTOM_NODES_DIR)
+        if nodes_path.exists():
+            print("Checking custom node requirements...")
+            for node_dir in nodes_path.iterdir():
+                if node_dir.is_dir():
+                    req_file = node_dir / "requirements.txt"
+                    if req_file.exists():
+                        subprocess.run(
+                            ["pip", "install", "-q", "-r", str(req_file)], 
+                            check=False
+                        )
+        
+        # Download essential models if not exist
+        model_tasks = [
+            ("checkpoints", "ltx-2-19b-dev.safetensors", "Lightricks/LTX-2"),
+            ("checkpoints", "ltx-2-spatial-upscaler-x2-1.0.safetensors", "Lightricks/LTX-2"),
+            ("loras", "ltx-2-19b-distilled-lora-384.safetensors", "Lightricks/LTX-2"),
+            ("text_encoders", "gemma_3_12B_it_fp8_e4m3fn.safetensors", "GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn"),
+        ]
+        
+        print("Checking models...")
+        for subdir, filename, repo in model_tasks:
+            target = Path(MODELS_DIR) / subdir / filename
+            if not target.exists():
+                print(f"Downloading {filename}...")
+                try:
+                    downloaded = hf_hub_download(repo_id=repo, filename=filename, local_dir="/tmp/hf")
+                    shutil.move(downloaded, str(target))
+                    print(f"Downloaded: {filename}")
+                except Exception as e:
+                    print(f"Error downloading {filename}: {e}")
+        
+        # Create extra_model_paths.yaml for volume models
+        extra_paths = f"""
+comfyui:
+    base_path: {VOLUME_MOUNT}/models
+    checkpoints: checkpoints/
+    loras: loras/
+    vae: vae/
+    clip: clip/
+    diffusion_models: diffusion_models/
+    text_encoders: text_encoders/
+    upscale_models: upscale_models/
+"""
+        extra_path_file = Path(COMFYUI_DIR) / "extra_model_paths.yaml"
+        extra_path_file.write_text(extra_paths)
+        
+        # Configure Manager
+        manager_config = Path(COMFYUI_DIR) / "user" / "__manager"
+        manager_config.mkdir(parents=True, exist_ok=True)
+        (manager_config / "config.ini").write_text(
+            "[default]\nnetwork_mode = personal_cloud\nsecurity_level = weak\nlog_to_file = false\n"
+        )
+        
+        # Commit volume changes
+        model_volume.commit()
+        print("Setup complete!")
+
+    @modal.web_server(WEB_PORT, startup_timeout=120)
+    def ui(self):
+        """Launch ComfyUI web server"""
+        print(f"Starting ComfyUI on {WEB_HOST}:{WEB_PORT}...")
+        subprocess.Popen(
+            f"comfy launch -- --output-directory {OUTPUT_DIR} --listen {WEB_HOST} --port {WEB_PORT}",
+            shell=True
+        )
