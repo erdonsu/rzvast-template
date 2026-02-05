@@ -1,43 +1,69 @@
-import os
+"""
+Script to install missing custom nodes to the volume
+"""
 import modal
-import subprocess
-# PATH YANG BENAR - langsung /data/ComfyUI bukan /data/comfy/ComfyUI
-DATA_ROOT = "/data"
-CUSTOM_NODES_DIR = "/data/ComfyUI/custom_nodes"
-image = modal.Image.debian_slim().apt_install("git")
-vol = modal.Volume.from_name("comfyui-app", create_if_missing=True)
-app = modal.App(name="install-custom-nodes", image=image)
-CUSTOM_NODES = [
-    ("ComfyUI-VideoHelperSuite", "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git"),
-    ("ComfyUI-Custom-Scripts", "https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git"),
-]
-@app.function(timeout=1800, volumes={DATA_ROOT: vol})
-def install_nodes():
-    os.makedirs(CUSTOM_NODES_DIR, exist_ok=True)
+
+VOLUME_NAME = "comfyui-app"
+VOL_NODES = "/data/ComfyUI/custom_nodes"
+
+vol = modal.Volume.from_name(VOLUME_NAME)
+
+# Image with git installed
+image = modal.Image.debian_slim(python_version="3.11").apt_install("git")
+
+app = modal.App("install-nodes")
+
+@app.function(
+    image=image,
+    volumes={"/data": vol},
+    timeout=600,
+)
+def install_missing_nodes():
+    import os
+    import subprocess
     
-    for name, url in CUSTOM_NODES:
-        target_dir = os.path.join(CUSTOM_NODES_DIR, name)
-        print(f"[NODE] {name}")
-        
-        if os.path.exists(target_dir):
-            print(f"  [SKIP] Already exists")
-            continue
-        
-        try:
-            subprocess.run(["git", "clone", "--depth", "1", url, target_dir], check=True)
-            vol.commit()
-            print(f"  [OK] Installed")
-        except Exception as e:
-            print(f"  [ERROR] {e}")
+    os.makedirs(VOL_NODES, exist_ok=True)
+    os.chdir(VOL_NODES)
     
-    # Verify
-    print("\nVerifying installation:")
-    for name, _ in CUSTOM_NODES:
-        path = os.path.join(CUSTOM_NODES_DIR, name)
-        if os.path.exists(path):
-            print(f"  [FOUND] {name}")
+    nodes_to_install = [
+        {
+            "name": "Comfyui_TTP_Toolset",
+            "url": "https://github.com/TTPlanetPig/Comfyui_TTP_Toolset.git",
+            "provides": "LTXVFirstLastFrameControl_TTP"
+        },
+        {
+            "name": "ComfyUI_LTX-2_VRAM_Memory_Management",
+            "url": "https://github.com/RandomInternetPreson/ComfyUI_LTX-2_VRAM_Memory_Management.git",
+            "provides": "TensorParallelV3Node"
+        }
+    ]
+    
+    for node in nodes_to_install:
+        node_path = f"{VOL_NODES}/{node['name']}"
+        if not os.path.exists(node_path):
+            print(f"Installing {node['name']} (provides: {node['provides']})...")
+            subprocess.run([
+                "git", "clone", "--depth", "1",
+                node["url"],
+                node_path
+            ], check=True)
+            print(f"  ✓ {node['name']} installed!")
         else:
-            print(f"  [MISSING] {name}")
+            print(f"  ✓ {node['name']} already exists")
+    
+    # List all nodes
+    print("\n📦 Custom nodes in volume:")
+    nodes = sorted(os.listdir(VOL_NODES))
+    for item in nodes:
+        if os.path.isdir(f"{VOL_NODES}/{item}"):
+            print(f"  - {item}")
+    
+    print(f"\nTotal: {len(nodes)} custom nodes")
+    
+    # Commit changes
+    vol.commit()
+    print("\n✅ Volume committed!")
+
 @app.local_entrypoint()
 def main():
-    install_nodes.remote()
+    install_missing_nodes.remote()
